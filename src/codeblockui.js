@@ -10,7 +10,6 @@
 import { Plugin, Collection, Model, SplitButtonView, createDropdown, addListToDropdown, ViewModel } from 'ckeditor5';
 import { getNormalizedAndLocalizedLanguageDefinitions } from './utils';
 
-import codeBlockIcon from '../theme/icons/codeblock.svg';
 import '../theme/codeblock.css';
 import 'highlight.js/styles/github.css';
 
