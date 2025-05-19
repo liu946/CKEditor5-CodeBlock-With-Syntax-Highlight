@@ -7,7 +7,7 @@
  * @module code-block/indentcodeblockcommand
  */
 
-import Command from '@ckeditor/ckeditor5-core/src/command';
+import { Command } from 'ckeditor5';
 import {
 	getIndentOutdentPositions,
 	isModelSelectionInCodeBlock
