@@ -115,7 +115,7 @@ export default class CodeBlockEditing extends Plugin {
       }
       ],
       // A single tab.
-      indentSequence: '\t',
+      indentSequence: '    ',
     });
   }
 

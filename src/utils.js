@@ -209,28 +209,31 @@ export function getIndentOutdentPositions(model) {
     // inserting or deleting using the writer.
     const walker = selection.getFirstRange().getWalker({
       ignoreElementEnd: true,
-      direction: 'backward'
+      direction: 'forward'
     });
-
-    for (const {
-      item
-    } of walker) {
+    let last_end_with_nl = false;
+    for (const { item } of walker) {
       if (item.is('$textProxy') && item.parent.is('element', 'codeBlock')) {
-        const leadingWhiteSpaces = getLeadingWhiteSpaces(item.textNode);
-        const {
-          parent,
-          startOffset
-        } = item.textNode;
-
-        // Make sure the position is after all leading whitespaces in the text node.
-        const position = model.createPositionAt(parent, startOffset + leadingWhiteSpaces.length);
-
-        positions.push(position);
+        // const leadingWhiteSpaces = getLeadingWhiteSpaces(item.textNode);
+        const { parent, startOffset} = item.textNode;
+        if (last_end_with_nl) {
+          const m = item.textNode.data.match(/^[\t ]*\S/);
+          if (m) {
+            const position = model.createPositionAt(parent, startOffset + m.index + m[0].length - 1);
+            positions.push(position);
+          }
+        }
+        
+        [...item.textNode.data.matchAll(/\n\s*(\S)/g)].map(m => {
+          const position = model.createPositionAt(parent, startOffset + m.index + m[0].length - 1);
+          positions.push(position);
+        });
+        last_end_with_nl = Boolean(item.textNode.data.match(/\n\s*$/));
       }
     }
   }
 
-  return positions;
+  return positions.reverse();
 }
 
 /**
