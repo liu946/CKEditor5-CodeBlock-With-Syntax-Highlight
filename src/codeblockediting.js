@@ -15,7 +15,8 @@ import OutdentCodeBlockCommand from './outdentcodeblockcommand';
 import {
   getNormalizedAndLocalizedLanguageDefinitions,
   getLeadingWhiteSpaces,
-  rawSnippetTextToModelDocumentFragment
+  rawSnippetTextToModelDocumentFragment,
+  domCodeToModel,
 } from './utils';
 import {
   modelToViewCodeBlockInsertion,
@@ -156,9 +157,39 @@ export default class CodeBlockEditing extends Plugin {
       allowAttributes: ['language']
     });
 
+    schema.register('hljs', {
+      allowWhere: '$text',
+      allowIn: ['codeBlock', 'hljs'],
+      isBlock: false,
+      // isInline: true,
+      allowAttributes: ['class'],
+    })
+
     schema.extend('$text', {
-      allowIn: 'codeBlock'
+      allowIn: ['codeBlock', 'hljs']
     });
+
+    editor.conversion.for('downcast').elementToElement({
+      model: 'hljs',
+      view: (modelElement, { writer }) => {
+        return writer.createContainerElement('span', {
+          class: modelElement.getAttribute('class')
+        })
+      }
+    });
+
+    editor.conversion.for('upcast').elementToElement({
+      view: {
+        name: 'span',
+        classes: [/^hljs-/],
+      },
+      model: (viewElement, { writer }) => {
+        return writer.createElement('hljs', {
+          class: viewElement.getAttribute('class')
+        });
+      }
+    });
+    
 
     // Disallow all attributes on $text inside `codeBlock`.
     schema.addAttributeCheck((context, attributeName) => {
@@ -201,22 +232,40 @@ export default class CodeBlockEditing extends Plugin {
     // so it can be pasted later on and retain it's preformatted nature.
     this.listenTo(model, 'getSelectedContent', (evt, [selection]) => {
       const anchor = selection.anchor;
+      console.log(anchor.parent.name)
 
-      if (selection.isCollapsed || !anchor.parent.is('element', 'codeBlock') || !anchor.hasSameParentAs(selection.focus)) {
+      if (selection.isCollapsed 
+          || !(anchor.parent.is('element', 'codeBlock') || anchor.parent.is('element', 'hljs'))
+          // || !anchor.hasSameParentAs(selection.focus)
+        ) {
         return;
       }
 
+      function getTextRecursive(node) {
+        if (node.is('$text')) {
+          return node.data;
+        } else {
+          let text = '';
+          Array.from(node.getChildren()).forEach(c => {
+            text += getTextRecursive(c);
+          });
+          return text;
+        }
+      }
+
       model.change(writer => {
-        const docFragment = evt.return;
+        const docFragment = evt.return;  // codeBlock内部复制。这里是model的元素列表（选中的）
 
         // fo[o<softBreak></softBreak>b]ar  ->   <codeBlock language="...">[o<softBreak></softBreak>b]<codeBlock>
         if (docFragment.childCount > 1 || selection.containsEntireContent(anchor.parent)) {
+          const text = getTextRecursive(docFragment);
           const codeBlock = writer.createElement('codeBlock', anchor.parent.getAttributes());
-          writer.append(docFragment, codeBlock);
+          writer.appendText(text, codeBlock);
+          
+          // writer.append(docFragment, codeBlock);
 
           const newDocumentFragment = writer.createDocumentFragment();
           writer.append(codeBlock, newDocumentFragment);
-
           evt.return = newDocumentFragment;
         }
 
@@ -285,13 +334,23 @@ export default class CodeBlockEditing extends Plugin {
         if (nodes.getNode(0).data === '\t') return
       }
 
-      let textData = ''
-      for (let node of positionParent.getChildren()) {
-        let str;
-        if (node.name === 'softBreak') str = '\n'
-        else str = node.data
-        textData += str
+      function getTextRecursive(node) {
+        if (node.is('text')) {
+          return node.data;
+        } else if (node.name === 'softBreak') {
+          return '\n';
+        } else if (['hljs', 'codeBlock'].includes(node.name)) {
+          let text = '';
+          for (let child of node.getChildren()) {
+            text += getTextRecursive(child);
+          }
+          return text;
+        }
+        return '';
       }
+
+      const textData = getTextRecursive(positionParent);
+
       const res = hljs.highlight(positionParent.getAttribute('language'), textData)
       const dom = new DOMParser().parseFromString('<div>' + res.value + '</div>', "text/xml");
 
@@ -299,18 +358,11 @@ export default class CodeBlockEditing extends Plugin {
       editor.model.change((writer) => {
         const curPath = editor.model.document.selection.getFirstPosition().path
         writer.remove(writer.createRangeIn(positionParent))
-        for (let node of dom.children[0].childNodes) {
-          if (node.nodeName === 'span') {
-            writer.appendText(node.textContent, {
-              hljs: node.className
-            }, positionParent)
-          } else if (node.nodeName === '#text') {
-            writer.appendText(node.textContent, positionParent)
-          }
-        }
+        // 递归处理dom节点，插入内容
+        writer.append(domCodeToModel(dom, writer), positionParent);
 
         const position = writer.createPositionFromPath(editor.model.document.getRoot(), [...curPath])
-        writer.setSelection(position)
+        // writer.setSelection(position)
 
       })
     });

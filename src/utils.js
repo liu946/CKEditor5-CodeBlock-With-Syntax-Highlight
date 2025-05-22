@@ -141,20 +141,27 @@ export function rawSnippetTextToModelDocumentFragment(writer, text) {
 export function domCodeToModel(dom, writer) {
   const fragment = writer.createDocumentFragment()
   if (!dom.children[0]) return fragment
-  const models = Array.prototype.map.call(dom.children[0].childNodes,
-    node => {
-      if (node.nodeName === 'span') {
-        return writer.createText(node.textContent, { hljs: node.className })
-      } else if (node.nodeName === '#text') {
-        return writer.createText(node.textContent)
+  // 递归处理dom节点，插入内容
+  function processNode(node, parentModel) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.nodeName === 'span' && node.classList.toString().includes('hljs-')) {
+        const hljsElement = writer.createElement('hljs', {
+          class: node.classList.toString(),
+        });
+
+        Array.from(node.childNodes).forEach(child => processNode(child, hljsElement));
+
+        writer.insert(hljsElement, parentModel, 'end');
+      } else {
+        // 其他元素保持原结构
+        Array.from(node.childNodes).forEach(child => processNode(child, parentModel));
       }
-    })
+    } else if (node.nodeType === Node.TEXT_NODE) {
+      writer.insertText(node.textContent, parentModel, 'end');
+    }
+  }
 
-
-  models.forEach(model => {
-    writer.append(model, fragment)
-
-  })
+  Array.from(dom.children[0].childNodes).forEach(node => processNode(node, fragment));
   return fragment
 }
 

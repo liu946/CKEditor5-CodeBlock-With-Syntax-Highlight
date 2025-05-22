@@ -91,6 +91,7 @@ export default class OutdentCodeBlockCommand extends Command {
 	 * @returns {Boolean} Whether the command should be enabled.
 	 */
 	_checkEnabled() {
+		return false; // todo fix
 		if ( !this._indentSequence ) {
 			return false;
 		}

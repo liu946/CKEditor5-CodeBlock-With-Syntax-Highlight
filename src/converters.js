@@ -66,7 +66,7 @@ export function modelToViewCodeBlockInsertion(model, languageDefs, useLabels = f
       mapper,
       consumable
     } = conversionApi;
-
+    // 编辑内容走这里
     if (!consumable.consume(data.item, 'insert')) {
       return;
     }
